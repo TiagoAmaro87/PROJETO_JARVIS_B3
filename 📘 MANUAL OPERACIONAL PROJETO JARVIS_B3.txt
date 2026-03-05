@@ -1,0 +1,46 @@
+📈 B3 Deep Intelligence System (BDIS)
+Status: Fase de Arquitetura e Definição de Módulos
+
+📝 Descrição
+Sistema automatizado de trading focado no mercado brasileiro (B3), integrando Deep Learning para previsão de tendências e IA Genérica para análise de sentimento e filtragem de contexto macroeconômico. O sistema é desenhado para operar em três frentes: Day Trade (Intraday), Swing Trade (Dias) e Position Trade (Semanas/Meses).
+
+✅ O Que Já Fizemos (Milestones Concluídos)
+Definição de Escopo: Estabelecemos a necessidade de um sistema híbrido que cubra diferentes horizontes temporais.
+
+Arquitetura Modular: Dividimos o projeto em blocos independentes para facilitar a manutenção e o escalonamento:
+
+Módulo de Ingestão: Conexão com corretoras/MetaTrader 5 e APIs de dados (Yahoo Finance, Profit, etc.).
+
+Módulo de Inteligência (Core): Onde residem os modelos de Deep Learning (LSTM, Transformers para séries temporais).
+
+Módulo de Risco: O "coração" financeiro (Stop Loss, Take Profit, Trailing Stop e cálculo de volatilidade/ATR).
+
+Módulo de Execução: Envio de ordens e conferência de ordens executadas.
+
+Filosofia de Operação: Prioridade total ao Gerenciamento de Risco sobre a busca por "setups mágicos".
+
+🚀 Para Onde Vamos (Próximos Passos)
+1. Modelagem de Dados (Data Engineering)
+Limpeza de Outliers: Tratar gaps de abertura e leilões na B3.
+
+Feature Engineering: Criar indicadores customizados além do preço (Volume Profile, VWAP, Acumulação/Distribuição).
+
+2. Desenvolvimento do Deep Learning Core
+Implementação de Redes LSTM (Long Short-Term Memory) para identificar padrões de continuidade em séries temporais.
+
+Uso de Reinforcement Learning (Aprendizado por Reforço) para que a IA aprenda a otimizar as saídas das operações.
+
+3. Integração com a B3 via Python/MT5
+Estabelecer a ponte via biblioteca MetaTrader5 para extração de dados em tempo real e envio de ordens em conta demo/real.
+
+4. Backtesting de Alta Fidelidade
+Testar as estratégias contra dados históricos reais, considerando slippage (atraso na execução) e taxas da B3 (emolumentos).
+
+🛠 Stack Tecnológica Sugerida
+Linguagem: Python 3.10+
+
+Deep Learning: PyTorch ou TensorFlow.
+
+Análise de Dados: Pandas, NumPy e Scikit-Learn.
+
+Interface/Execução: MetaTrader 5 (MT5 Python Integration).
