@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  jarvis-b3:
+    build: .
+    container_name: jarvis-b3
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./BRAIN (DL):/app/BRAIN (DL)
+    environment:
+      - JARVIS_MODE=dry_run
+      - TZ=America/Sao_Paulo
+    # Note: MT5 requires Windows. Docker for training/backtest only.
+    # For live trading, use run_b3_forever.bat on Windows with MT5.
+    command: >
+      python "BRAIN (DL)/brain_engine_v2.py"

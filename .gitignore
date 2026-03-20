@@ -162,6 +162,8 @@ cython_debug/
 # Custom Jarvis B3 ignores
 *.h5
 *.pkl
+*.csv
+check_xp_config.py
 LOGS/*.txt
 !LOGS/.keep
 sinal_jarvis.txt

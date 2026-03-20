@@ -1,7 +1,7 @@
 import MetaTrader5 as mt5
 
 MT5_LOGIN = 54206952
-MT5_PASS = "And1and1411208*#"
+MT5_PASS = "jNQ4EM6#"
 MT5_SERVER = "XPMT5-DEMO"
 
 def detect_config():
