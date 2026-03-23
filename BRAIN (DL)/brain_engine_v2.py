@@ -12,7 +12,9 @@ from datetime import datetime
 from loguru import logger
 
 import MetaTrader5 as mt5
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, r"E:\JARVIS_SYSTEM")
+from core.nexus_unified import Nexus
+sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     import xgboost as xgb
@@ -118,6 +120,10 @@ class BrainEngineV2:
         self.mlp_model = None
         self.features = FEATURES_BASE
         self._trade_history = []
+        self.network_log_path = os.path.join(BASE_DIR, "logs", "agent_network.json")
+        
+        # Ensure logs dir exists
+        os.makedirs(os.path.dirname(self.network_log_path), exist_ok=True)
 
     def load_models(self) -> bool:
         """Load trained models."""
@@ -245,6 +251,96 @@ class BrainEngineV2:
             
         return "NEUTRAL"
 
+    def ask_oracle(self, query: str):
+        """Ask the Oracle Agent for intelligence via JARVIS_NETWORK."""
+        logger.info(f"[NETWORK] Brain -> Oracle: {query}")
+        # Log to the JSON hub
+        msg = {"from": "Brain", "to": "Oracle", "query": query, "time": datetime.now().isoformat()}
+        try:
+            with open(self.network_log_path, "a") as f:
+                f.write(json.dumps(msg) + "\n")
+        except: pass
+        
+        # Mirror to Obsidian (Scribe work)
+        obsidian_path = r"C:\Users\tiago\Documents\Obsidian_Brain\00_Sistemas\Sala_de_Guerra_Agentes.md"
+        if os.path.exists(obsidian_path):
+            with open(obsidian_path, "a", encoding="utf-8") as f:
+                f.write(f"| **BrainEngine** | **Oracle** | \"{query}\" | \"Oráculo analisando e varrendo fontes...\" |\n")
+
+    def detect_smc_zones(self, df: pd.DataFrame) -> dict:
+        """Detect Fair Value Gaps (FVG)."""
+        if len(df) < 5: return {"bullish_fvg": False, "bearish_fvg": False}
+        
+        # Bullish FVG: Low(3) > High(1)
+        bullish = df.iloc[-1]['Low'] > df.iloc[-3]['High']
+        # Bearish FVG: High(3) < Low(1)
+        bearish = df.iloc[-1]['High'] < df.iloc[-3]['Low']
+        
+        return {"bullish_fvg": bullish, "bearish_fvg": bearish}
+
+    def _manage_trailing_stop(self):
+        """Move stop to lock profit at 1%, 2.5% and 3.5% levels."""
+        if self.dry_run: return
+        
+        positions = self.executor.get_posicoes_abertas()
+        for pos in positions:
+            ticker = pos['symbol']
+            entry = pos['price_open']
+            current = pos['price_current']
+            ticket = pos['ticket']
+            sl = pos['sl']
+            
+            # Profit %
+            profit_pct = (current - entry) / entry if pos['type'] == "buy" else (entry - current) / entry
+            
+            new_sl = None
+            if pos['type'] == "buy":
+                # BUY Trail
+                if profit_pct >= 0.035 and sl < entry * 1.02:
+                    new_sl = entry * 1.02 # Lock 2%
+                elif profit_pct >= 0.025 and sl < entry * 1.01:
+                    new_sl = entry * 1.01 # Lock 1%
+                elif profit_pct >= 0.010 and sl < entry:
+                    new_sl = entry # Breakeven
+            else:
+                # SELL Trail
+                if profit_pct >= 0.035 and sl > entry * 0.98:
+                    new_sl = entry * 0.98 # Lock 2%
+                elif profit_pct >= 0.025 and sl > entry * 0.99:
+                    new_sl = entry * 0.99 # Lock 1%
+                elif profit_pct >= 0.010 and sl > entry:
+                    new_sl = entry # Breakeven
+            
+            if new_sl:
+                self.executor.modificar_stop(ticket, new_sl)
+
+    def _autonomous_scribe(self, summary: str):
+        """Scribe Agent: Writes to Obsidian daily log and war room automatically."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        log_path = f"C:\\Users\\tiago\\Documents\\Obsidian_Brain\\04_Diário\\{today}.md"
+        war_room_path = "C:\\Users\\tiago\\Documents\\Obsidian_Brain\\00_Sistemas\\Sala_de_Guerra_Agentes.md"
+        
+        # Append to Daily Log
+        if os.path.exists(log_path):
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"\n- **[AUTO-SCRIBE]** {datetime.now().strftime('%H:%M:%S')}: {summary}\n")
+        
+        # Mirror to War Room
+        if os.path.exists(war_room_path):
+            with open(war_room_path, "a", encoding="utf-8") as f:
+                f.write(f"| **BrainEngine** | **Scribe** | \"Status: {summary}\" | \"Registrado no Diário de Bordo.\" |\n")
+
+    def _autonomous_guardian(self):
+        """Guardian Agent: Commits and pushes to GitHub every hour."""
+        # Check if it's been 1 hour since last push
+        # (Simplified: Runs every 60 scans if not on a timer)
+        if not hasattr(self, '_scan_count'): self._scan_count = 0
+        self._scan_count += 1
+        
+        if self._scan_count % 60 == 0:
+            logger.info("[GUARDIAN] Hourly Cloud Backup initiating...")
+            os.system(f"cd /d E:\\PROJETO_JARVIS_B3 && git add . && git commit -m \"AUTO-GUARDIAN: System Sync {today}\" && git push origin main")
+
     def scan_market(self):
         """Scan all watchlist tickers."""
         now = datetime.now()
@@ -256,8 +352,15 @@ class BrainEngineV2:
                 logger.info(f"[BRAIN] Fora do horario B3 ({hora}h). Aguardando...")
             return
 
+        self._manage_trailing_stop() # New: Manage open trades first
+
+        posicoes = self.executor.get_posicoes_abertas() if not self.dry_run else []
+        summary = f"Varredura Realizada. Posicoes: {len(posicoes)}/{MAX_POSICOES}"
+        self._autonomous_scribe(summary)
+        self._autonomous_guardian()
+
         logger.info(f"\n[BRAIN] Varredura {now.strftime('%H:%M:%S')} | "
-                    f"Posicoes: {len(self.executor.get_posicoes_abertas())}/{MAX_POSICOES}")
+                    f"Posicoes: {len(posicoes)}/{MAX_POSICOES}")
 
         for ticker in WATCHLIST:
             try:
@@ -297,6 +400,8 @@ class BrainEngineV2:
 
         prob = self.predict(df)
         preco = df["Close"].iloc[-1]
+        # SMC Filter
+        smc = self.detect_smc_zones(df)
         
         # EDGE: Multi-Strategy Signal
         strat_signal = self.get_strategy_signal(ticker, df)
@@ -306,13 +411,13 @@ class BrainEngineV2:
         if not self.self_reflect(ticker, prob, sentiment):
             return
 
-        # LOGIC: Hybrid (ML Prob + Strat Alignment)
-        if prob > PROB_COMPRA and strat_signal == "BUY":
+        # LOGIC: Hybrid (ML Prob + Strat Alignment + SMC)
+        if prob > PROB_COMPRA and strat_signal == "BUY" and smc['bullish_fvg']:
             direction = "BUY"
-        elif prob < PROB_VENDA and strat_signal == "SELL":
+        elif prob < PROB_VENDA and strat_signal == "SELL" and smc['bearish_fvg']:
             direction = "SELL"
         else:
-            return # No edge alignment today
+            return # No institutional alignment today
         posicoes = self.executor.get_posicoes_abertas() if not self.dry_run else []
         if len(posicoes) >= MAX_POSICOES:
             return
@@ -326,8 +431,10 @@ class BrainEngineV2:
             result = self.executor.comprar(ticker, lote, sl, tp)
             if "error" in result:
                 logger.error(f"[BRAIN] {ticker} REJEITADA: {result['error']}")
+                self.ask_oracle(f"Por que a ordem de {ticker} foi rejeitada? Verifique a corretora XP.")
             else:
                 logger.success(f"[BRAIN] {ticker} ORDEM DISPARADA: {result['status']}")
+                self.ask_oracle(f"Ordem de COMPRA disparada para {ticker}. Monitorar notícias do setor.")
 
             self._trade_history.append({
                 "ticker": ticker, "side": "buy", "prob": prob,

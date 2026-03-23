@@ -235,3 +235,33 @@ class B3Executor:
             logger.info(f"[B3-EXEC] CLOSED {position.symbol} PnL={position.profit:.2f}")
             return {"ticket": position.ticket, "pnl": position.profit}
         return {"error": f"close failed: {mt5.last_error()}"}
+
+    def modificar_stop(self, ticket: int, new_sl: float, new_tp: float = 0) -> bool:
+        """Modify an existing position's SL/TP."""
+        if self.dry_run:
+            logger.info(f"[B3-EXEC] DRY MODIFY ticket={ticket} SL={new_sl}")
+            return True
+
+        if not self._connected: return False
+
+        # Get existing position to keep TP if not provided
+        pos = mt5.positions_get(ticket=ticket)
+        if not pos or len(pos) == 0: return False
+        pos = pos[0]
+        
+        tp = new_tp if new_tp > 0 else pos.tp
+
+        request = {
+            "action": mt5.TRADE_ACTION_SLTP,
+            "symbol": pos.symbol,
+            "position": ticket,
+            "sl": new_sl,
+            "tp": tp,
+        }
+
+        result = mt5.order_send(request)
+        if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+            logger.info(f"[B3-EXEC] MODIFIED ticket={ticket} NEW SL={new_sl:.2f}")
+            return True
+        logger.error(f"[B3-EXEC] FAILED MODIFY ticket={ticket}: {mt5.last_error()}")
+        return False
